@@ -126,7 +126,8 @@ def fetch_recent_news(symbol: str, name: str, limit: int = 6) -> tuple[List[Dict
             mainstream_items.append(it)
 
     x_items: List[Dict[str, str]] = []
-    for it in fetch_x_news_via_google_x_search(symbol, name, limit=max(6, limit * 2)):
+    # X 新闻抓取上限与外层 limit 对齐；函数内部已做候选过采样，不需要在这里再次放大。
+    for it in fetch_x_news_via_google_x_search(symbol, name, limit=limit):
         link = (it.get('url') or '').strip()
         if link and link not in seen:
             seen.add(link)
