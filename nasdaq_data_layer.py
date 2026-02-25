@@ -12,6 +12,13 @@ import requests
 import yfinance as yf
 
 
+# News pipeline knobs (single-source-of-truth; avoid scattered magic numbers)
+NEWS_OUTPUT_LIMIT = 6
+NEWS_FETCH_POOL_MAIN_PRIMARY = 36
+NEWS_FETCH_POOL_MAIN_FALLBACK = 30
+NEWS_FETCH_POOL_X = 20
+
+
 def get_nasdaq100_table() -> pd.DataFrame:
     url = "https://en.wikipedia.org/wiki/Nasdaq-100"
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -94,7 +101,7 @@ def fetch_x_news_via_google_x_search(symbol: str, name: str, limit: int = 6) -> 
         pass
     return items[:limit]
 
-def fetch_recent_news(symbol: str, name: str, limit: int = 6) -> tuple[List[Dict[str, str]], Dict[str, int]]:
+def fetch_recent_news(symbol: str, name: str, limit: int = NEWS_OUTPUT_LIMIT) -> tuple[List[Dict[str, str]], Dict[str, int]]:
     headers = {"User-Agent": "Mozilla/5.0"}
     seen = set()
 
@@ -117,9 +124,9 @@ def fetch_recent_news(symbol: str, name: str, limit: int = 6) -> tuple[List[Dict
 
     mainstream_items: List[Dict[str, str]] = []
     # 先尽量拉全候选池，再做关键词相关性筛选（而不是“抓几条就用几条”）。
-    candidates = _pull_google(f"{symbol} stock OR {name} when:3m", cap=max(limit * 6, 36))
+    candidates = _pull_google(f"{symbol} stock OR {name} when:3m", cap=NEWS_FETCH_POOL_MAIN_PRIMARY)
     if len(candidates) < max(8, limit * 2):
-        candidates += _pull_google(f"{symbol} stock OR {name}", cap=max(limit * 5, 30))
+        candidates += _pull_google(f"{symbol} stock OR {name}", cap=NEWS_FETCH_POOL_MAIN_FALLBACK)
     for it in candidates:
         link = it.get('url', '')
         if link and link not in seen:
@@ -128,7 +135,7 @@ def fetch_recent_news(symbol: str, name: str, limit: int = 6) -> tuple[List[Dict
 
     x_items: List[Dict[str, str]] = []
     # X 侧同样先扩大候选池，再由关键词过滤 + 评分挑选。
-    x_fetch_limit = max(limit * 4, 20)
+    x_fetch_limit = NEWS_FETCH_POOL_X
     for it in fetch_x_news_via_google_x_search(symbol, name, limit=x_fetch_limit):
         link = (it.get('url') or '').strip()
         if link and link not in seen:
