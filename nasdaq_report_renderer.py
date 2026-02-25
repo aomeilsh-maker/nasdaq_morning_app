@@ -21,6 +21,14 @@ def render_report(picks: List[Any], regime: dict, winrate: Any, long_views: List
     else:
         summary_text = "前5个推荐日胜率：暂无可统计数据（需要先累积历史推荐）"
 
+    if winrate.high_est_total > 0:
+        high_est_text = (
+            f"预估胜率≥{winrate.high_est_threshold:.0f}% 子集胜率："
+            f"{winrate.high_est_wins}/{winrate.high_est_total} = {winrate.high_est_rate:.1f}%"
+        )
+    else:
+        high_est_text = f"预估胜率≥{winrate.high_est_threshold:.0f}% 子集胜率：暂无可统计数据"
+
     winrate_items = "".join(
         f"<li>{html.escape(str(d['date']))}: {int(d['wins'])}/{int(d['total'])} = {float(d['rate']):.1f}%"
         + f"<br><span class='muted'>✅ 胜出: {html.escape(', '.join(d.get('win_symbols', [])) or '无')}</span>"
@@ -179,6 +187,7 @@ def render_report(picks: List[Any], regime: dict, winrate: Any, long_views: List
           <div class='card'>
             <h3>前五日推荐股票胜率（滚动）</h3>
             <p><b>{html.escape(summary_text)}</b></p>
+            <p><b>{html.escape(high_est_text)}</b></p>
             <details><summary>查看按推荐日明细</summary><ul>{winrate_items}</ul></details>
           </div>
           <div class='card'>

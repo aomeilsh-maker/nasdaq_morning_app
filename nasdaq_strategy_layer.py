@@ -55,6 +55,11 @@ class WinrateSummary:
     wins: int
     rate: float
     details: List[Dict[str, Any]]
+    # Subset metric: symbols with estimated 5D winrate >= threshold at least once in last 5 reco days.
+    high_est_total: int
+    high_est_wins: int
+    high_est_rate: float
+    high_est_threshold: float
 
 @dataclass
 class LongTermView:
@@ -348,6 +353,7 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
 
     today = dt.date.today().isoformat()
     symbols = [p.symbol for p in picks]
+    high_est_threshold = 70.0
 
     # 先用历史中的前5个推荐日计算胜率（不含今天）
     prev_days = [r for r in history if r.get("date") != today]
@@ -356,17 +362,22 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
     # 去重逻辑：在最近5个推荐日中，同一只股票只统计一次。
     # 统计口径使用该窗口内「最早被推荐那天」的 entry_price，与最新收盘价比较。
     earliest_entries: Dict[str, Dict[str, Any]] = {}
+    # For "high-estimated-winrate" subset, keep earliest qualifying entry (>= threshold).
+    earliest_high_est_entries: Dict[str, Dict[str, Any]] = {}
     for row in recent_days:
         day = str(row.get("date", ""))
         entries = row.get("picks", []) if isinstance(row.get("picks"), list) else []
         for e in entries:
             sym = str(e.get("symbol", "")).strip().upper()
             entry_price = float(e.get("entry_price", 0) or 0)
+            est_winrate = float(e.get("est_winrate_5d", 0) or 0)
             if not sym or entry_price <= 0:
                 continue
             # recent_days 按时间顺序（旧 -> 新），首次出现即为窗口内最早推荐
             if sym not in earliest_entries:
                 earliest_entries[sym] = {"date": day, "entry_price": entry_price}
+            if est_winrate >= high_est_threshold and sym not in earliest_high_est_entries:
+                earliest_high_est_entries[sym] = {"date": day, "entry_price": entry_price, "est_winrate_5d": est_winrate}
 
     all_symbols = sorted(earliest_entries.keys())
     current_close: Dict[str, float] = {}
@@ -394,6 +405,21 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
             wins += 1
 
     rate = round((wins / total * 100), 1) if total else 0.0
+
+    # 子集统计：最近5个推荐日中，曾出现“预估胜率>=70%”的股票（去重后每只仅统计一次）。
+    high_est_symbols = sorted(earliest_high_est_entries.keys())
+    high_est_total = 0
+    high_est_wins = 0
+    for sym in high_est_symbols:
+        info = earliest_high_est_entries[sym]
+        entry_price = float(info.get("entry_price", 0) or 0)
+        now_price = current_close.get(sym)
+        if entry_price <= 0 or now_price is None:
+            continue
+        high_est_total += 1
+        if now_price > entry_price:
+            high_est_wins += 1
+    high_est_rate = round((high_est_wins / high_est_total * 100), 1) if high_est_total else 0.0
 
     # 按推荐日明细：使用“该推荐日的 entry_price”与“当前最新收盘价”比较。
     # 这里保留每个推荐日自己的口径，不按跨日去重。
@@ -433,7 +459,15 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
     today_row = {
         "date": today,
         "symbols": symbols,
-        "picks": [{"symbol": p.symbol, "entry_price": round(float(p.price), 4)} for p in picks],
+        "picks": [
+            {
+                "symbol": p.symbol,
+                "entry_price": round(float(p.price), 4),
+                "est_winrate_5d": round(float(p.signal_winrate_5d), 2),
+                "confidence": int(p.confidence),
+            }
+            for p in picks
+        ],
         "updated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
@@ -442,7 +476,16 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
     history = history[-60:]  # 保留最近60次
     _save_history(history_path, history)
 
-    return WinrateSummary(total=total, wins=wins, rate=rate, details=details)
+    return WinrateSummary(
+        total=total,
+        wins=wins,
+        rate=rate,
+        details=details,
+        high_est_total=high_est_total,
+        high_est_wins=high_est_wins,
+        high_est_rate=high_est_rate,
+        high_est_threshold=high_est_threshold,
+    )
 
 def build_long_term_views() -> List[LongTermView]:
     targets = [
