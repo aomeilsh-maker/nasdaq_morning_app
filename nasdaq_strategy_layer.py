@@ -280,7 +280,8 @@ def build_picks(limit: int = 5) -> tuple[list[Pick], dict]:
             p.confidence = max(60, min(92, conf))
             p.grade = "A" if p.confidence >= 82 else ("B" if p.confidence >= 72 else "C")
     for p in top:
-        p.news, _ = fetch_recent_news(p.symbol, p.name, limit=NEWS_OUTPUT_LIMIT)
+        # 短线新闻同样按阈值过滤后全量输出，不再固定6条。
+        p.news, _ = fetch_recent_news(p.symbol, p.name, limit=None)
         p.sentiment = sentiment_from_news(p.news)
     return top, regime
 

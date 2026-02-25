@@ -18,8 +18,8 @@ NEWS_FETCH_POOL_MAIN_PRIMARY = 36
 NEWS_FETCH_POOL_MAIN_FALLBACK = 30
 NEWS_FETCH_POOL_X = 20
 # Relevance/quality thresholds (applies to both long-term and short-term news)
-NEWS_MIN_RELEVANCE_SCORE = 2
-NEWS_MIN_FINAL_SCORE = 3.5
+NEWS_MIN_RELEVANCE_SCORE = 5
+NEWS_MIN_FINAL_SCORE = 8.5
 
 
 def get_nasdaq100_table() -> pd.DataFrame:
