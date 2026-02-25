@@ -290,9 +290,61 @@ def _load_history(path: Path) -> list[dict]:
 def _save_history(path: Path, rows: list[dict]) -> None:
     path.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
 
+
+def _backfill_est_winrate_5d(history: list[dict]) -> bool:
+    """Backfill missing est_winrate_5d for historical picks using each recommendation day's market context.
+
+    For each history row(date), compute signal winrate as-of that day (using data ending on that day),
+    then write est_winrate_5d into picks entries if missing.
+    """
+    changed = False
+    for row in history:
+        day = str(row.get("date", "")).strip()
+        entries = row.get("picks", []) if isinstance(row.get("picks"), list) else []
+        if not day or not entries:
+            continue
+
+        missing_symbols: list[str] = []
+        for e in entries:
+            if "est_winrate_5d" not in e:
+                sym = str(e.get("symbol", "")).strip().upper()
+                if sym:
+                    missing_symbols.append(sym)
+
+        if not missing_symbols:
+            continue
+
+        try:
+            asof = pd.Timestamp(day)
+            start = (asof - pd.Timedelta(days=420)).strftime("%Y-%m-%d")
+            end = (asof + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+            data = yf.download(sorted(set(missing_symbols)), start=start, end=end, interval="1d", auto_adjust=True, progress=False, threads=False)
+
+            est_map: Dict[str, float] = {}
+            for sym in sorted(set(missing_symbols)):
+                close = _extract_series(data, "Close", sym).dropna()
+                est_map[sym] = float(_signal_winrate_5d(close)) if len(close) else 0.0
+
+            for e in entries:
+                if "est_winrate_5d" in e:
+                    continue
+                sym = str(e.get("symbol", "")).strip().upper()
+                if not sym:
+                    continue
+                e["est_winrate_5d"] = round(float(est_map.get(sym, 0.0)), 2)
+                changed = True
+        except Exception:
+            # Keep pipeline robust: skip failed day backfill without interrupting report.
+            continue
+
+    return changed
+
+
 def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
     history_path = Path(__file__).with_name("nasdaq_reco_history.json")
     history = _load_history(history_path)
+    if _backfill_est_winrate_5d(history):
+        _save_history(history_path, history)
 
     today = dt.date.today().isoformat()
     symbols = [p.symbol for p in picks]

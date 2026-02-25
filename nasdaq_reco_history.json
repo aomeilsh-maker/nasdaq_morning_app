@@ -1,0 +1,216 @@
+[
+  {
+    "date": "2026-02-23",
+    "symbols": [
+      "AMAT",
+      "WDC",
+      "MU",
+      "ADI",
+      "ODFL",
+      "LRCX",
+      "STX",
+      "MPWR",
+      "FANG",
+      "BKR"
+    ],
+    "picks": [
+      {
+        "symbol": "AMAT",
+        "entry_price": 375.38,
+        "est_winrate_5d": 70.65
+      },
+      {
+        "symbol": "WDC",
+        "entry_price": 285.52,
+        "est_winrate_5d": 79.21
+      },
+      {
+        "symbol": "MU",
+        "entry_price": 428.17,
+        "est_winrate_5d": 79.55
+      },
+      {
+        "symbol": "ADI",
+        "entry_price": 355.03,
+        "est_winrate_5d": 69.33
+      },
+      {
+        "symbol": "ODFL",
+        "entry_price": 201.39,
+        "est_winrate_5d": 57.14
+      },
+      {
+        "symbol": "LRCX",
+        "entry_price": 244.92,
+        "est_winrate_5d": 66.98
+      },
+      {
+        "symbol": "STX",
+        "entry_price": 411.11,
+        "est_winrate_5d": 67.03
+      },
+      {
+        "symbol": "MPWR",
+        "entry_price": 1204.1,
+        "est_winrate_5d": 63.92
+      },
+      {
+        "symbol": "FANG",
+        "entry_price": 176.01,
+        "est_winrate_5d": 50.91
+      },
+      {
+        "symbol": "BKR",
+        "entry_price": 62.21,
+        "est_winrate_5d": 58.62
+      }
+    ],
+    "updated_at": "2026-02-23 15:22:38"
+  },
+  {
+    "date": "2026-02-24",
+    "symbols": [
+      "AMAT",
+      "ADI",
+      "WDC",
+      "MU",
+      "BKR",
+      "LRCX",
+      "ASML",
+      "CCEP",
+      "HON",
+      "CMCSA"
+    ],
+    "picks": [
+      {
+        "symbol": "AMAT",
+        "entry_price": 373.55,
+        "est_winrate_5d": 70.97
+      },
+      {
+        "symbol": "ADI",
+        "entry_price": 355.15,
+        "est_winrate_5d": 69.74
+      },
+      {
+        "symbol": "WDC",
+        "entry_price": 280.42,
+        "est_winrate_5d": 78.43
+      },
+      {
+        "symbol": "MU",
+        "entry_price": 420.97,
+        "est_winrate_5d": 79.55
+      },
+      {
+        "symbol": "BKR",
+        "entry_price": 63.67,
+        "est_winrate_5d": 59.09
+      },
+      {
+        "symbol": "LRCX",
+        "entry_price": 242.27,
+        "est_winrate_5d": 67.29
+      },
+      {
+        "symbol": "ASML",
+        "entry_price": 1485.99,
+        "est_winrate_5d": 57.78
+      },
+      {
+        "symbol": "CCEP",
+        "entry_price": 107.49,
+        "est_winrate_5d": 47.62
+      },
+      {
+        "symbol": "HON",
+        "entry_price": 243.06,
+        "est_winrate_5d": 64.58
+      },
+      {
+        "symbol": "CMCSA",
+        "entry_price": 31.63,
+        "est_winrate_5d": 58.93
+      }
+    ],
+    "updated_at": "2026-02-24 08:19:59"
+  },
+  {
+    "date": "2026-02-25",
+    "symbols": [
+      "AMAT",
+      "ADI",
+      "MU",
+      "BKR",
+      "LRCX",
+      "ASML",
+      "KDP",
+      "ODFL",
+      "HON",
+      "MPWR"
+    ],
+    "picks": [
+      {
+        "symbol": "AMAT",
+        "entry_price": 377.93,
+        "est_winrate_5d": 70.97,
+        "confidence": 92
+      },
+      {
+        "symbol": "ADI",
+        "entry_price": 356.09,
+        "est_winrate_5d": 69.74,
+        "confidence": 91
+      },
+      {
+        "symbol": "MU",
+        "entry_price": 418.01,
+        "est_winrate_5d": 79.55,
+        "confidence": 90
+      },
+      {
+        "symbol": "BKR",
+        "entry_price": 64.72,
+        "est_winrate_5d": 59.09,
+        "confidence": 85
+      },
+      {
+        "symbol": "LRCX",
+        "entry_price": 244.25,
+        "est_winrate_5d": 67.29,
+        "confidence": 84
+      },
+      {
+        "symbol": "ASML",
+        "entry_price": 1497.8,
+        "est_winrate_5d": 57.78,
+        "confidence": 81
+      },
+      {
+        "symbol": "KDP",
+        "entry_price": 31.03,
+        "est_winrate_5d": 65.79,
+        "confidence": 81
+      },
+      {
+        "symbol": "ODFL",
+        "entry_price": 196.7,
+        "est_winrate_5d": 57.89,
+        "confidence": 76
+      },
+      {
+        "symbol": "HON",
+        "entry_price": 243.61,
+        "est_winrate_5d": 64.58,
+        "confidence": 74
+      },
+      {
+        "symbol": "MPWR",
+        "entry_price": 1213.67,
+        "est_winrate_5d": 64.29,
+        "confidence": 72
+      }
+    ],
+    "updated_at": "2026-02-25 13:18:49"
+  }
+]
