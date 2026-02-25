@@ -509,7 +509,22 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
     prev_days = [r for r in history if r.get("date") != today]
     recent_days = prev_days[-5:]
 
-    all_symbols = sorted({s for r in recent_days for s in r.get("symbols", [])})
+    # 去重逻辑：在最近5个推荐日中，同一只股票只统计一次。
+    # 统计口径使用该窗口内「最早被推荐那天」的 entry_price，与最新收盘价比较。
+    earliest_entries: Dict[str, Dict[str, Any]] = {}
+    for row in recent_days:
+        day = str(row.get("date", ""))
+        entries = row.get("picks", []) if isinstance(row.get("picks"), list) else []
+        for e in entries:
+            sym = str(e.get("symbol", "")).strip().upper()
+            entry_price = float(e.get("entry_price", 0) or 0)
+            if not sym or entry_price <= 0:
+                continue
+            # recent_days 按时间顺序（旧 -> 新），首次出现即为窗口内最早推荐
+            if sym not in earliest_entries:
+                earliest_entries[sym] = {"date": day, "entry_price": entry_price}
+
+    all_symbols = sorted(earliest_entries.keys())
     current_close: Dict[str, float] = {}
     if all_symbols:
         try:
@@ -521,10 +536,24 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
         except Exception:
             current_close = {}
 
-    details: List[Dict[str, Any]] = []
+    # 总胜率：按去重后的股票集合统计（每只股票只计一次）。
     total = 0
     wins = 0
+    for sym in all_symbols:
+        info = earliest_entries[sym]
+        entry_price = float(info.get("entry_price", 0) or 0)
+        now_price = current_close.get(sym)
+        if entry_price <= 0 or now_price is None:
+            continue
+        total += 1
+        if now_price > entry_price:
+            wins += 1
 
+    rate = round((wins / total * 100), 1) if total else 0.0
+
+    # 按推荐日明细：使用“该推荐日的 entry_price”与“当前最新收盘价”比较。
+    # 这里保留每个推荐日自己的口径，不按跨日去重。
+    details: List[Dict[str, Any]] = []
     for row in recent_days:
         day = str(row.get("date", ""))
         day_total = 0
@@ -532,6 +561,7 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
         day_win_symbols: List[str] = []
         day_loss_symbols: List[str] = []
         entries = row.get("picks", []) if isinstance(row.get("picks"), list) else []
+
         for e in entries:
             sym = str(e.get("symbol", "")).strip().upper()
             entry_price = float(e.get("entry_price", 0) or 0)
@@ -554,10 +584,6 @@ def calc_last5_winrate_and_update_history(picks: List[Pick]) -> WinrateSummary:
                 "win_symbols": day_win_symbols,
                 "loss_symbols": day_loss_symbols,
             })
-            total += day_total
-            wins += day_wins
-
-    rate = round((wins / total * 100), 1) if total else 0.0
 
     # 写入/更新今天的推荐记录（用于未来5日统计）
     today_row = {
