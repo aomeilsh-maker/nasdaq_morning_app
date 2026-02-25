@@ -11,6 +11,7 @@ import pandas as pd
 import yfinance as yf
 
 from nasdaq_data_layer import (
+    NEWS_OUTPUT_LIMIT,
     _event_candidates_from_ticker,
     _extract_series,
     _safe_float,
@@ -265,7 +266,7 @@ def build_picks(limit: int = 5) -> tuple[list[Pick], dict]:
             p.confidence = max(60, min(92, conf))
             p.grade = "A" if p.confidence >= 82 else ("B" if p.confidence >= 72 else "C")
     for p in top:
-        p.news, _ = fetch_recent_news(p.symbol, p.name, limit=6)
+        p.news, _ = fetch_recent_news(p.symbol, p.name, limit=NEWS_OUTPUT_LIMIT)
         p.sentiment = sentiment_from_news(p.news)
     return top, regime
 
@@ -418,7 +419,8 @@ def build_long_term_views() -> List[LongTermView]:
 
             events = _event_candidates_from_ticker(symbol, name, limit=6)
             # 动态新闻条数：不再写死8条，按可用活动信息和个股复杂度自适应
-            news_limit = min(14, max(6, len(events) + 6))
+            # 与数据层统一：长线新闻最终输出条数固定为 NEWS_OUTPUT_LIMIT。
+            news_limit = NEWS_OUTPUT_LIMIT
             news_items, news_stats = fetch_recent_news(symbol, name, limit=news_limit)
             pos_cnt = 0
             neg_cnt = 0
