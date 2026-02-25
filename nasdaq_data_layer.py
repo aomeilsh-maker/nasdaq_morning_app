@@ -116,9 +116,10 @@ def fetch_recent_news(symbol: str, name: str, limit: int = 6) -> tuple[List[Dict
         return out
 
     mainstream_items: List[Dict[str, str]] = []
-    candidates = _pull_google(f"{symbol} stock OR {name} when:3m", cap=max(limit * 4, 24))
-    if len(candidates) < max(3, limit):
-        candidates += _pull_google(f"{symbol} stock OR {name}", cap=max(limit * 3, 18))
+    # 先尽量拉全候选池，再做关键词相关性筛选（而不是“抓几条就用几条”）。
+    candidates = _pull_google(f"{symbol} stock OR {name} when:3m", cap=max(limit * 6, 36))
+    if len(candidates) < max(8, limit * 2):
+        candidates += _pull_google(f"{symbol} stock OR {name}", cap=max(limit * 5, 30))
     for it in candidates:
         link = it.get('url', '')
         if link and link not in seen:
@@ -126,8 +127,9 @@ def fetch_recent_news(symbol: str, name: str, limit: int = 6) -> tuple[List[Dict
             mainstream_items.append(it)
 
     x_items: List[Dict[str, str]] = []
-    # X 新闻抓取上限与外层 limit 对齐；函数内部已做候选过采样，不需要在这里再次放大。
-    for it in fetch_x_news_via_google_x_search(symbol, name, limit=limit):
+    # X 侧同样先扩大候选池，再由关键词过滤 + 评分挑选。
+    x_fetch_limit = max(limit * 4, 20)
+    for it in fetch_x_news_via_google_x_search(symbol, name, limit=x_fetch_limit):
         link = (it.get('url') or '').strip()
         if link and link not in seen:
             seen.add(link)
@@ -136,6 +138,34 @@ def fetch_recent_news(symbol: str, name: str, limit: int = 6) -> tuple[List[Dict
     all_items = mainstream_items + x_items
     if not all_items:
         return [], {"main_pool": 0, "x_pool": 0, "used": 0}
+
+    symbol_upper = symbol.upper().strip()
+    name_tokens = [t.lower() for t in re.findall(r"[A-Za-z0-9]+", name) if len(t) >= 3]
+    topic_keywords = {
+        "stock", "shares", "price", "rating", "upgrade", "downgrade", "earnings", "revenue",
+        "guidance", "forecast", "outlook", "ai", "chip", "semiconductor", "data center", "cloud",
+        "launch", "product", "conference", "investor", "buyback", "acquisition", "merger",
+    }
+
+    def _keyword_relevance(it: Dict[str, str]) -> int:
+        title = str(it.get("title", ""))
+        low = title.lower()
+        score = 0
+        if symbol_upper and symbol_upper in title.upper():
+            score += 3
+        if any(tok in low for tok in name_tokens):
+            score += 2
+        if any(k in low for k in topic_keywords):
+            score += 1
+        return score
+
+    # 先做相关性过滤：优先保留“公司相关 + 主题相关”的消息。
+    filtered_items = [it for it in all_items if _keyword_relevance(it) >= 3]
+    # 兜底：如果过滤后太少，放宽阈值，避免极端情况下无消息可用。
+    if len(filtered_items) < max(4, limit):
+        filtered_items = [it for it in all_items if _keyword_relevance(it) >= 2]
+    if not filtered_items:
+        filtered_items = all_items
 
     def _age_days(pub: str) -> float:
         try:
@@ -152,7 +182,7 @@ def fetch_recent_news(symbol: str, name: str, limit: int = 6) -> tuple[List[Dict
             return 999
 
     scored = []
-    for it in all_items:
+    for it in filtered_items:
         age = _age_days(str(it.get('pub_date', '')))
         freshness = 3.0 if age <= 1 else (2.0 if age <= 3 else (1.0 if age <= 7 else (0.5 if age <= 30 else 0.0)))
         source = str(it.get('source', ''))
