@@ -283,24 +283,120 @@ def _extract_future_date_from_text(text: str) -> str:
     return ''
 
 def _symbol_event_queries(symbol: str, name: str) -> List[str]:
-    base = [
+    """Build generic future-event search queries (no hard-coded ticker events)."""
+    return [
         f"({symbol} OR {name}) (earnings date OR investor day OR conference OR product launch OR keynote OR guidance call OR hearing) when:3m",
     ]
-    special = {
-        'INTC': [
-            'Intel Foundry Direct Connect 2026 March 24',
-            'Intel FDC 2026 March 24',
-            'Intel event March 2026 foundry',
-            'site:intel.com Intel event March 2026',
-        ],
-        'NVDA': ['NVIDIA GTC 2026 date', 'site:nvidia.com event 2026'],
-        'AMD': ['AMD Advancing AI 2026 event', 'site:amd.com events 2026'],
-        'MSFT': ['Microsoft Build 2026 date', 'site:microsoft.com event 2026'],
-        'AMZN': ['AWS re:Invent 2026 date', 'Amazon investor event 2026'],
-        'META': ['Meta Connect 2026 date', 'Meta developer event 2026'],
-        'GOOGL': ['Google I/O 2026 date', 'Alphabet investor event 2026'],
-    }
-    return base + special.get(symbol.upper(), [])
+
+
+# Official company feeds for direct (non-Google) event/news lookup.
+# Keep this explicit so long-term event detection can use first-party sources.
+OFFICIAL_EVENT_FEEDS: Dict[str, List[str]] = {
+    "INTC": [
+        "https://www.intc.com/rss/news-releases.xml",
+    ],
+    "NVDA": [
+        "https://nvidianews.nvidia.com/releases.xml",
+    ],
+    "AMD": [
+        "https://ir.amd.com/rss/news-releases.xml",
+    ],
+    "MSFT": [
+        "https://news.microsoft.com/feed/",
+        "https://blogs.microsoft.com/feed/",
+    ],
+    "AMZN": [
+        "https://www.aboutamazon.com/news.xml",
+        "https://www.amazon.com/gp/help/rss/about",
+    ],
+    "META": [
+        "https://about.fb.com/news/feed/",
+    ],
+    "GOOGL": [
+        "https://blog.google/rss/",
+        "https://www.blog.google/rss/",
+    ],
+}
+
+
+def _future_events_from_official_sites(symbol: str, name: str, limit: int = 3) -> List[Dict[str, str]]:
+    """Pull event hints directly from company official RSS/Atom feeds."""
+    feeds = OFFICIAL_EVENT_FEEDS.get(symbol.upper(), [])
+    if not feeds:
+        return []
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+    out: List[Dict[str, str]] = []
+    seen = set()
+    now = pd.Timestamp.now().normalize()
+    horizon = now + pd.Timedelta(days=120)
+    event_keywords = [
+        'earnings', 'investor', 'conference', 'launch', 'keynote', 'event',
+        'webcast', 'summit', 'connect', 'build', 'gtc', 're:invent', 'foundry',
+    ]
+
+    for feed in feeds:
+        if len(out) >= limit:
+            break
+        try:
+            resp = requests.get(feed, headers=headers, timeout=15)
+            resp.raise_for_status()
+            root = ET.fromstring(resp.text)
+            # RSS item + Atom entry support
+            entries = root.findall('.//item') + root.findall('.//{http://www.w3.org/2005/Atom}entry')
+
+            for it in entries[:40]:
+                if len(out) >= limit:
+                    break
+
+                title = (it.findtext('title') or it.findtext('{http://www.w3.org/2005/Atom}title') or '').strip()
+                link = (it.findtext('link') or '').strip()
+                if not link:
+                    link_node = it.find('{http://www.w3.org/2005/Atom}link')
+                    if link_node is not None:
+                        link = (link_node.attrib.get('href') or '').strip()
+                pub = (
+                    it.findtext('pubDate')
+                    or it.findtext('{http://www.w3.org/2005/Atom}updated')
+                    or it.findtext('{http://www.w3.org/2005/Atom}published')
+                    or ''
+                ).strip()
+
+                if not title or not link or link in seen:
+                    continue
+                low = title.lower()
+                if not any(k in low for k in event_keywords):
+                    continue
+
+                # Prefer explicit future date in title/link; fallback to recent official event hints.
+                d = _extract_future_date_from_text(f"{title} {link}")
+                dtv = pd.to_datetime(d, errors='coerce') if d else pd.NaT
+                if pd.notna(dtv) and not (now <= dtv.normalize() <= horizon):
+                    continue
+
+                if pd.isna(dtv) and pub:
+                    try:
+                        pubdt = pd.to_datetime(pub, errors='coerce')
+                        if pd.notna(pubdt):
+                            if pubdt.tzinfo is not None:
+                                pubdt = pubdt.tz_convert(None)
+                            if pubdt.normalize() < (now - pd.Timedelta(days=45)):
+                                continue
+                    except Exception:
+                        pass
+
+                seen.add(link)
+                date_text = f"（预计日期: {dtv.strftime('%Y-%m-%d')}）" if pd.notna(dtv) else "（日期待确认）"
+                out.append({
+                    'type': '未来活动',
+                    'title': f"{title}{date_text}",
+                    'source': 'Official site feed',
+                    'url': link,
+                })
+        except Exception:
+            continue
+
+    return out[:limit]
 
 def _future_events_from_news(symbol: str, name: str, limit: int = 4) -> List[Dict[str, str]]:
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -483,7 +579,18 @@ def _event_candidates_from_ticker(symbol: str, name: str, limit: int = 5) -> Lis
     except Exception:
         pass
 
-    # B) Unstructured future-event hints from mainstream news
+    # B) First-party company websites (official feeds)
+    if len(items) < limit:
+        official = _future_events_from_official_sites(symbol, name, limit=limit - len(items))
+        for e in official:
+            t = str(e.get('title', '')).strip()
+            if t and t not in seen:
+                seen.add(t)
+                items.append(e)
+            if len(items) >= limit:
+                break
+
+    # C) Unstructured future-event hints from mainstream news
     if len(items) < limit:
         extra = _future_events_from_news(symbol, name, limit=limit - len(items))
         for e in extra:
@@ -494,7 +601,7 @@ def _event_candidates_from_ticker(symbol: str, name: str, limit: int = 5) -> Lis
             if len(items) >= limit:
                 break
 
-    # C) loose fallback if still empty
+    # D) loose fallback if still empty
     if len(items) < limit:
         extra2 = _future_events_from_news_loose(symbol, name, limit=limit - len(items))
         for e in extra2:
