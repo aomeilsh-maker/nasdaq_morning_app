@@ -207,23 +207,16 @@ def score_symbol(symbol: str, name: str, risk_on: bool, hist: pd.DataFrame | Non
         stop_hint = f"{stop:.2f} 附近"
         target_hint = f"{target:.2f} 附近"
 
-        reason_parts = []
-        if ret_20d > 0:
-            reason_parts.append(f"20日动量 {ret_20d:.1f}%")
-        if ret_60d > 0:
-            reason_parts.append(f"60日趋势 {ret_60d:.1f}%")
-        if price > ma20:
-            reason_parts.append("站上20日线")
-        if ma20 > ma50:
-            reason_parts.append("20日线高于50日线")
-        if volume_ratio > 1.1:
-            reason_parts.append(f"量能 {volume_ratio:.2f}x")
-        reason_parts.append(f"CMF20 {cmf20:.2f}")
-        reason_parts.append(f"OBV20变化 {obv_trend_20:.1f}%")
-        if signal_winrate_5d > 0:
-            reason_parts.append(f"历史同信号5日胜率 {signal_winrate_5d:.0f}%")
-        reason_parts.append(accumulation_tag)
-        reason = "；".join(reason_parts) if reason_parts else "信号一般"
+        # Keep short-term rationale schema fixed across symbols (avoid cards feeling inconsistent).
+        trend_text = f"均线结构: 价{'上' if price > ma20 else '下'}20日线 / 20日线{'上' if ma20 > ma50 else '下'}50日线"
+        volume_text = f"量能: {volume_ratio:.2f}x"
+        flow_text = f"资金流: CMF20 {cmf20:.2f}, OBV20 {obv_trend_20:.1f}%（{accumulation_tag}）"
+        risk_text = f"风险: 20D波动 {vol20_annual:.1f}%, 60D回撤 {max_dd_60d:.1f}%"
+        win_text = f"同信号5日胜率: {signal_winrate_5d:.0f}%" if signal_winrate_5d > 0 else "同信号5日胜率: 样本不足"
+        reason = (
+            f"动量: 5日 {ret_5d:.1f}% / 20日 {ret_20d:.1f}% / 60日 {ret_60d:.1f}%；"
+            f"{trend_text}；{volume_text}；{flow_text}；{risk_text}；{win_text}"
+        )
 
         return Pick(
             symbol=symbol, name=name, score=score, confidence=conf, grade=grade,
