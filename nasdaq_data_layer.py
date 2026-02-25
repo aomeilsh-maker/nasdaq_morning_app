@@ -17,6 +17,9 @@ NEWS_OUTPUT_LIMIT = 6
 NEWS_FETCH_POOL_MAIN_PRIMARY = 36
 NEWS_FETCH_POOL_MAIN_FALLBACK = 30
 NEWS_FETCH_POOL_X = 20
+# Relevance/quality thresholds (applies to both long-term and short-term news)
+NEWS_MIN_RELEVANCE_SCORE = 2
+NEWS_MIN_FINAL_SCORE = 3.5
 
 
 def get_nasdaq100_table() -> pd.DataFrame:
@@ -169,13 +172,11 @@ def fetch_recent_news(symbol: str, name: str, limit: int | None = NEWS_OUTPUT_LI
             score += 1
         return score
 
-    # 先做相关性过滤：优先保留“公司相关 + 主题相关”的消息。
-    filtered_items = [it for it in all_items if _keyword_relevance(it) >= 3]
-    # 兜底：如果过滤后太少，放宽阈值，避免极端情况下无消息可用。
-    if len(filtered_items) < max(4, (effective_limit or NEWS_OUTPUT_LIMIT)):
-        filtered_items = [it for it in all_items if _keyword_relevance(it) >= 2]
+    # 相关性过滤：仅保留达到最低相关性阈值的消息。
+    # 不再回退到“全量不过滤”，避免低质量/弱相关新闻进入输出。
+    filtered_items = [it for it in all_items if _keyword_relevance(it) >= NEWS_MIN_RELEVANCE_SCORE]
     if not filtered_items:
-        filtered_items = all_items
+        return [], {"main_pool": 0, "x_pool": 0, "used": 0}
 
     def _age_days(pub: str) -> float:
         try:
@@ -193,13 +194,19 @@ def fetch_recent_news(symbol: str, name: str, limit: int | None = NEWS_OUTPUT_LI
 
     scored = []
     for it in filtered_items:
+        relevance = _keyword_relevance(it)
         age = _age_days(str(it.get('pub_date', '')))
         freshness = 3.0 if age <= 1 else (2.0 if age <= 3 else (1.0 if age <= 7 else (0.5 if age <= 30 else 0.0)))
         source = str(it.get('source', ''))
-        # X gets timeliness preference, mainstream gets reliability preference.
+        # X偏时效、主流偏可靠：保留轻微来源权重，但让相关性主导。
         source_weight = 1.4 if source == 'X' else 1.0
-        score = freshness + source_weight
-        scored.append((score, it))
+        final_score = relevance * 1.2 + freshness + source_weight
+        if final_score < NEWS_MIN_FINAL_SCORE:
+            continue
+        scored.append((final_score, it))
+
+    if not scored:
+        return [], {"main_pool": 0, "x_pool": 0, "used": 0}
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
