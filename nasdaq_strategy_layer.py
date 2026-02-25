@@ -123,9 +123,11 @@ def sentiment_from_news(news: List[Dict[str, str]]) -> str:
         return "偏利空"
     return "中性"
 
-def score_symbol(symbol: str, name: str, risk_on: bool) -> Pick | None:
+def score_symbol(symbol: str, name: str, risk_on: bool, hist: pd.DataFrame | None = None) -> Pick | None:
     try:
-        hist = yf.download(symbol, period="1y", interval="1d", auto_adjust=True, progress=False, threads=False)
+        # Allow preloaded history injection (batch download in build_picks) to reduce request count.
+        if hist is None:
+            hist = yf.download(symbol, period="1y", interval="1d", auto_adjust=True, progress=False, threads=False)
         if hist is None or hist.empty or len(hist) < 80:
             return None
 
@@ -240,8 +242,20 @@ def build_picks(limit: int = 5) -> tuple[list[Pick], dict]:
     risk_on = bool(regime.get("risk_on", True))
 
     picks: List[Pick] = []
+
+    # Batch-download reduces network overhead vs per-symbol downloads (~100 -> 1 request).
+    symbols = [str(s).strip().upper() for s in table["symbol"].tolist() if str(s).strip()]
+    try:
+        hist_all = yf.download(symbols, period="1y", interval="1d", auto_adjust=True, progress=False, threads=False)
+    except Exception:
+        hist_all = pd.DataFrame()
+
     for _, row in table.iterrows():
-        p = score_symbol(row["symbol"], row["name"], risk_on=risk_on)
+        symbol = str(row["symbol"]).strip().upper()
+        name = str(row["name"]).strip()
+
+        # With a batched DataFrame, _extract_series can pull per-symbol OHLCV slices.
+        p = score_symbol(symbol, name, risk_on=risk_on, hist=hist_all)
         if p:
             picks.append(p)
 

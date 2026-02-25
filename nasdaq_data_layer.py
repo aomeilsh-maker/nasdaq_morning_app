@@ -254,11 +254,11 @@ def _safe_float(v, default: float = 0.0) -> float:
 
 def _extract_future_date_from_text(text: str) -> str:
     try:
-        m = re.search(r"(20\d{2}-\d{1,2}-\d{1,2})", text)
+        m = re.search(r"\b(20\d{2}-\d{1,2}-\d{1,2})\b", text)
         if m:
             return m.group(1)
         # Mar 18, 2026 / March 18, 2026
-        m = re.search(r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s*20\d{2}", text, re.I)
+        m = re.search(r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s*20\d{2}\b", text, re.I)
         if m:
             dtv = pd.to_datetime(m.group(0), errors='coerce')
             if pd.notna(dtv):
@@ -322,7 +322,7 @@ def _future_events_from_news(symbol: str, name: str, limit: int = 4) -> List[Dic
 
                 # fallback parse patterns like "March 24" without year -> assume this/next year
                 if pd.isna(dtv):
-                    m = re.search(r"(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}", low)
+                    m = re.search(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}\b", low)
                     if m:
                         guess = f"{m.group(0)} {now.year}"
                         g = pd.to_datetime(guess, errors='coerce')
