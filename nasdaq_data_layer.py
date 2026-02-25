@@ -66,7 +66,7 @@ def _extract_series(df: pd.DataFrame, field: str, symbol: str) -> pd.Series:
             return df[candidates[0]]
     return pd.Series(dtype=float)
 
-def fetch_x_news_via_google_x_search(symbol: str, name: str, limit: int = 4) -> List[Dict[str, str]]:
+def fetch_x_news_via_google_x_search(symbol: str, name: str, limit: int = 6) -> List[Dict[str, str]]:
     headers = {"User-Agent": "Mozilla/5.0"}
     items: List[Dict[str, str]] = []
     seen = set()
