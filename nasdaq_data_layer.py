@@ -101,9 +101,11 @@ def fetch_x_news_via_google_x_search(symbol: str, name: str, limit: int = 6) -> 
         pass
     return items[:limit]
 
-def fetch_recent_news(symbol: str, name: str, limit: int = NEWS_OUTPUT_LIMIT) -> tuple[List[Dict[str, str]], Dict[str, int]]:
+def fetch_recent_news(symbol: str, name: str, limit: int | None = NEWS_OUTPUT_LIMIT) -> tuple[List[Dict[str, str]], Dict[str, int]]:
     headers = {"User-Agent": "Mozilla/5.0"}
     seen = set()
+    # limit=None means "return all filtered/scored items" (used by long-term section).
+    effective_limit = limit if (isinstance(limit, int) and limit > 0) else None
 
     def _pull_google(query: str, cap: int = 18) -> List[Dict[str, str]]:
         out: List[Dict[str, str]] = []
@@ -125,7 +127,8 @@ def fetch_recent_news(symbol: str, name: str, limit: int = NEWS_OUTPUT_LIMIT) ->
     mainstream_items: List[Dict[str, str]] = []
     # 先尽量拉全候选池，再做关键词相关性筛选（而不是“抓几条就用几条”）。
     candidates = _pull_google(f"{symbol} stock OR {name} when:3m", cap=NEWS_FETCH_POOL_MAIN_PRIMARY)
-    if len(candidates) < max(8, limit * 2):
+    min_needed = max(8, (effective_limit or NEWS_OUTPUT_LIMIT) * 2)
+    if len(candidates) < min_needed:
         candidates += _pull_google(f"{symbol} stock OR {name}", cap=NEWS_FETCH_POOL_MAIN_FALLBACK)
     for it in candidates:
         link = it.get('url', '')
@@ -169,7 +172,7 @@ def fetch_recent_news(symbol: str, name: str, limit: int = NEWS_OUTPUT_LIMIT) ->
     # 先做相关性过滤：优先保留“公司相关 + 主题相关”的消息。
     filtered_items = [it for it in all_items if _keyword_relevance(it) >= 3]
     # 兜底：如果过滤后太少，放宽阈值，避免极端情况下无消息可用。
-    if len(filtered_items) < max(4, limit):
+    if len(filtered_items) < max(4, (effective_limit or NEWS_OUTPUT_LIMIT)):
         filtered_items = [it for it in all_items if _keyword_relevance(it) >= 2]
     if not filtered_items:
         filtered_items = all_items
@@ -203,29 +206,34 @@ def fetch_recent_news(symbol: str, name: str, limit: int = NEWS_OUTPUT_LIMIT) ->
     # Dynamic balancing by availability (not fixed counts)
     main_pool = [it for _, it in scored if it.get('source') != 'X']
     x_pool = [it for _, it in scored if it.get('source') == 'X']
-    total_pool = max(1, len(main_pool) + len(x_pool))
-    x_share = len(x_pool) / total_pool
-    # adaptive target from pool share (bounded, variable)
-    x_target = int(round(limit * x_share))
-    x_target = max(0, min(len(x_pool), x_target))
-    main_target = min(len(main_pool), limit - x_target)
 
-    result: List[Dict[str, str]] = []
-    result.extend(main_pool[:main_target])
-    result.extend(x_pool[:x_target])
+    if effective_limit is None:
+        # Return all filtered+scored items (for long-term analysis transparency).
+        final_items = [it for _, it in scored]
+    else:
+        total_pool = max(1, len(main_pool) + len(x_pool))
+        x_share = len(x_pool) / total_pool
+        # adaptive target from pool share (bounded, variable)
+        x_target = int(round(effective_limit * x_share))
+        x_target = max(0, min(len(x_pool), x_target))
+        main_target = min(len(main_pool), effective_limit - x_target)
 
-    # fill remaining by global score regardless of source
-    if len(result) < limit:
-        used = set(id(x) for x in result)
-        for _, it in scored:
-            if id(it) in used:
-                continue
-            result.append(it)
-            used.add(id(it))
-            if len(result) >= limit:
-                break
+        result: List[Dict[str, str]] = []
+        result.extend(main_pool[:main_target])
+        result.extend(x_pool[:x_target])
 
-    final_items = result[:limit]
+        # fill remaining by global score regardless of source
+        if len(result) < effective_limit:
+            used = set(id(x) for x in result)
+            for _, it in scored:
+                if id(it) in used:
+                    continue
+                result.append(it)
+                used.add(id(it))
+                if len(result) >= effective_limit:
+                    break
+
+        final_items = result[:effective_limit]
     stats = {"main_pool": len(main_pool), "x_pool": len(x_pool), "used": len(final_items)}
     return final_items, stats
 

@@ -432,10 +432,8 @@ def build_long_term_views() -> List[LongTermView]:
             max_dd_1y = float(dd.min()) if len(dd) else 0.0
 
             events = _event_candidates_from_ticker(symbol, name, limit=6)
-            # 动态新闻条数：不再写死8条，按可用活动信息和个股复杂度自适应
-            # 与数据层统一：长线新闻最终输出条数固定为 NEWS_OUTPUT_LIMIT。
-            news_limit = NEWS_OUTPUT_LIMIT
-            news_items, news_stats = fetch_recent_news(symbol, name, limit=news_limit)
+            # 长线新闻：筛选后不再额外截断（有几条就输出几条）。
+            news_items, news_stats = fetch_recent_news(symbol, name, limit=None)
             pos_cnt = 0
             neg_cnt = 0
             pos_w = 0.0
